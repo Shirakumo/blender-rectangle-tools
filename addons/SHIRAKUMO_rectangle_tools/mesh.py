@@ -1,9 +1,8 @@
-import bpy
 import math
 import bmesh
 import heapq
 from bpy_extras import view3d_utils
-from mathutils import Vector, Matrix, Quaternion
+from mathutils import Vector, Quaternion
 from mathutils.kdtree import KDTree
 from collections import defaultdict
 

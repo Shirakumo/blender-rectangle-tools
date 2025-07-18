@@ -1,7 +1,7 @@
 import bpy
 import bmesh
 from bl_ui.space_toolsystem_toolbar import VIEW3D_PT_tools_active as tools
-from mathutils import Vector, Matrix, Quaternion
+from mathutils import Vector, Matrix
 from . import module, render
 from .mesh import *
 
@@ -183,10 +183,11 @@ class SHIRAKUMO_RECT_GG_rectangle(bpy.types.GizmoGroup):
 
     def refresh(self, context):
         if self.mt != None:
+        if self.mt is not None:
             self.mt.refresh()
 
     def setup(self, context):
-        if self.mt == None:
+        if self.mt is None:
             self.mt = MeshTools(context.object)
         self.gizmo_dial = self.gizmos.new("SHIRAKUMO_RECT_G_rectangle_preselect")
 

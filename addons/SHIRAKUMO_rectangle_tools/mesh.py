@@ -7,6 +7,13 @@ from mathutils import Vector, Matrix, Quaternion
 from mathutils.kdtree import KDTree
 from collections import defaultdict
 
+def line_rotation(a,b):
+    dir = (b-a).normalized()
+    if dir == Vector([-1,0,0]):
+        return Quaternion(Vector([0,1,0]), math.pi)
+    else:
+        return Vector([1,0,0]).rotation_difference(dir)
+
 def line_factor(p, a, b, clamp=False):
     s = b - a
     w = p - a
@@ -19,6 +26,12 @@ def line_factor(p, a, b, clamp=False):
     else:
         closest = ps / l2
     return closest
+
+def line_snap(p, a, b, clamp=False):
+    return a + line_factor(p, a, b, clamp) * (b-a)
+
+def edge_rotation(edge):
+    return line_rotation(edge.verts[0].co, edge.verts[1].co)
 
 def edge_factor(edge, p, clamp=False):
     return line_factor(p, edge.verts[0].co, edge.verts[1].co, clamp)
@@ -33,16 +46,21 @@ def edge_distance(edge, p, clamp=True):
     x = edge_snap(edge, p, clamp)
     return (x-p).length
 
+def edge_distance_between(edge, a, b, clamp=False):
+    af = edge_factor(edge, a, clamp)
+    bf = edge_factor(edge, b, clamp)
+    return abs(af-bf) * edge_dir(edge).length
+
 def edge_between(a, b):
     for e in a.link_edges:
         if e.other_vert(a) == b:
             return e
     return None
 
-def mouse_position_3d(context, mouse_pos):
+def mouse_position_3d(context, mouse_pos, point=Vector()):
     region = context.region
     region3D = context.space_data.region_3d
-    return view3d_utils.region_2d_to_location_3d(region, region3D, mouse_pos, Vector([0.0,0.0,0.0]))
+    return view3d_utils.region_2d_to_location_3d(region, region3D, mouse_pos, point)
 
 def position_3d_mouse(context, pos):
     return view3d_utils.location_3d_to_region_2d(context.region, context.space_data.region_3d, pos)
@@ -57,17 +75,26 @@ class MeshTools():
         if self.mesh is not None:
             self.mesh.free()
         self.mesh = bmesh.from_edit_mesh(self.object.data)
+        self.mesh.faces.ensure_lookup_table()
+        self.mesh.edges.ensure_lookup_table()
         self.kd = KDTree(len(self.mesh.faces))
         for i,f in enumerate(self.mesh.faces):
             self.kd.insert(f.calc_center_median(), i)
         self.kd.balance()
 
+    def sync(self):
+        if self.mesh is not None:
+            bmesh.update_edit_mesh(self.object.data)
+            self.mesh.faces.ensure_lookup_table()
+            self.mesh.edges.ensure_lookup_table()
+
     def free(self, sync=False):
         if self.mesh is not None:
             if sync:
-                bmesh.update_edit_mesh(self.object)
+                self.sync()
             self.mesh.free()
         self.mesh = None
+        self.kd = None
 
     def closest_edge_view(self, context, mouse_pos):
         return self.closest_edge(mouse_position_3d(context, mouse_pos))
@@ -85,11 +112,8 @@ class MeshTools():
         p = edge_snap(e, point)
         return (e,d,p,f)
 
-    def project_to_plane(self, face, context, mouse_pos):
-        region = context.region
-        region3D = context.space_data.region_3d
-        view_vector = view3d_utils.region_2d_to_vector_3d(region, region3D, mouse_pos)
-        ## TODO: this
+    def project_to_plane(self, context, mouse_pos, point):
+        return mouse_position_3d(context, mouse_pos, point)
 
     def closest_connected_edge(self, e, point):
         f = edge_factor(e, point)
@@ -99,6 +123,7 @@ class MeshTools():
         while (f < 0 or 1 < f):
             v = e.verts[0] if f < 0.5 else e.verts[1]
             mindist = math.inf
+            ne = e
             for ec in v.link_edges:
                 v2 = ec.other_vert(v)
                 dirc = (v2.co-v.co).normalized()
@@ -108,9 +133,11 @@ class MeshTools():
                 dist = edge_distance(ec, point)
                 if dist < mindist:
                     mindist = dist
-                    e = ec
-            if mindist == math.inf:
+                    ne = ec
+            if ne == e:
                 break
+            e = ne
+            f = edge_factor(e, point)
         return e
 
     def edge_path(self, start, end):
@@ -120,9 +147,17 @@ class MeshTools():
         queue = []
         dist = defaultdict(lambda: math.inf)
         dist[start] = 0.0
-        heapq.heappush(queue, (0.0, start))
+        class Vert:
+            def __init__(self, v, dist=0.0):
+                self.v = v
+                self.dist = dist
+            def __lt__(self, other):
+                return self.dist < other.dist
+
+        heapq.heappush(queue, Vert(start))
         while queue:
-            _, u = heapq.heappop(queue)
+            u = heapq.heappop(queue)
+            u = u.v
             visited.add(u)
             for e in u.link_edges:
                 v = e.other_vert(u)
@@ -132,7 +167,7 @@ class MeshTools():
                 if dist[v] > alt:
                     prev[v] = (u,e)
                     dist[v] = alt
-                    heapq.heappush(queue, (alt, v))
+                    heapq.heappush(queue, Vert(v, alt))
         edges = []
         u = end
         while u is not None:
@@ -171,24 +206,26 @@ class MeshTools():
             v.co = point
             return v
 
-    def create_rect(self, se, start, point):
+    def create_rect(self, se, start, point, dissolve_verts=True):
         ## First handle the endpoints, create vertices as necessary
         start = self.create_vertex(se, start)
         ee = self.closest_connected_edge(se, point)
         end = self.create_vertex(ee, edge_snap(ee, point))
         if end == start:
             return None
-        print((se == ee, point, end.co))
         disp = point-end.co
         ## Now that we have the bounding vertices, perform the edge extrusion
         es = self.edge_path(start, end)
-        print(es)
         data = bmesh.ops.extrude_edge_only(self.mesh, edges=es)['geom']
         verts = [ x for x in data if isinstance(x, bmesh.types.BMVert) ]
         verts.sort(key=lambda v : edge_factor(se, v.co))
         for v in verts:
             v.co = v.co+disp
-        if 2 < len(verts):
+        if 2 < len(verts) and dissolve_verts:
             ## Fuse away the inner vertices in the new edge that were created
             bmesh.ops.dissolve_verts(self.mesh, verts=verts[1:-1])
-        return (verts[0], verts[-1])
+            verts = (verts[0], verts[-1])
+            es = edge_between(verts[0],verts[1])
+        else:
+            es = self.edge_path(verts[0],verts[-1])
+        return (verts,es)

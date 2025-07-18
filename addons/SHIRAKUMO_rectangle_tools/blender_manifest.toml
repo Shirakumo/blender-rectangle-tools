@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 id = "SHIRAKUMO_rectangle_tools"
 name = "Rectangle Tools"
-version = "0.0.1"
+version = "1.0.0"
 tagline = "Tools to more easily draw rectangles in edit mode"
 maintainer = "Yukari Hafner"
 type = "add-on"

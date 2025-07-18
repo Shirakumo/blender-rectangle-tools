@@ -3,7 +3,7 @@ from . import tools
 
 bl_info = {
     "name": "Rectangle Tools",
-    "version": (0, 0, 1),
+    "version": (1, 0, 0),
     "blender": (4, 0, 0),
     "isDraft": True,
     "developer": "Yukari Hafner",

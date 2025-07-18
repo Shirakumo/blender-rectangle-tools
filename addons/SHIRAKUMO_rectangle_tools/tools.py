@@ -96,7 +96,10 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
         start = self.snap(self.start)
         end = self.snap(self.end)
         mt = MeshTools(context.object)
-        res = mt.create_rect(mt.mesh.edges[self.edge], start, end, dissolve_verts=self.dissolve_verts)
+        edge = None
+        if self.edge < len(mt.mesh.edges):
+            edge = mt.mesh.edges[self.edge]
+        res = mt.create_rect(edge, start, end, dissolve_verts=self.dissolve_verts)
         if res is not None:
             mt.select(res[1])
         mt.free(sync=True)
@@ -117,7 +120,10 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
             mesh = bmesh.new()
             mesh.from_mesh(context.object.data)
         mesh.edges.ensure_lookup_table()
-        edge = mesh.edges[self.edge]
+        if len(mesh.edges) <= self.edge:
+            edge = FakeEdge(self.start)
+        else:
+            edge = mesh.edges[self.edge]
         c1 = edge_snap(edge, self.snap(self.start))
         c3 = self.snap(self.end)
         c2 = edge_snap(edge, c3)
@@ -163,12 +169,18 @@ class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
             self.draw_custom_shape(self.line, matrix=mat)
 
     def test_select(self, context, mouse_pos):
-        e,d,p,f = self.group.mt.closest_edge_view(context, mouse_pos)
-        self.edgepoint = snap_to_grid(p, module.preferences.grid)
-        self.edge = e
-        self.op.edge = e.index
+        res = self.group.mt.closest_edge_view(context, mouse_pos)
+        if res is None:
+            p = mouse_position_3d(context, mouse_pos)
+            self.edge = None
+            self.op.edge = 0
+        else:
+            e,d,p,f = res
+            self.edge = e
+            self.op.edge = e.index
         self.op.start = p
         self.op.grid = module.preferences.grid
+        self.edgepoint = snap_to_grid(p, module.preferences.grid)
         context.area.tag_redraw()
         return 0
 
@@ -181,8 +193,11 @@ class SHIRAKUMO_RECT_GG_rectangle(bpy.types.GizmoGroup):
     bl_operator = "shirakumo_rect.draw_rectangle"
     mt = None
 
+    @classmethod
+    def poll(self, context):
+        return (context.object is not None and context.object.type == 'MESH')
+
     def refresh(self, context):
-        if self.mt != None:
         if self.mt is not None:
             self.mt.refresh()
 

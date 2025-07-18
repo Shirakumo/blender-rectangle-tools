@@ -64,6 +64,15 @@ def mouse_position_3d(context, mouse_pos, point=Vector()):
 def position_3d_mouse(context, pos):
     return view3d_utils.location_3d_to_region_2d(context.region, context.space_data.region_3d, pos)
 
+class FakeEdge:
+    def __init__(self, a=Vector(), b=None):
+        class FakeVert:
+            def __init__(self, co):
+                self.co = co
+        if b is None:
+            b = a+Vector([1,0,0])
+        self.verts = [FakeVert(a), FakeVert(b)]
+
 class MeshTools():
     def __init__(self, object):
         self.object = object
@@ -109,7 +118,11 @@ class MeshTools():
 
     def closest_edge(self, point):
         f = self.kd.find(point)[1]
+        if f is None:
+            return None
         edges = self.mesh.faces[f].edges
+        if len(edges) < 1:
+            return None
         e = edges[0]
         d = edge_distance(e, point)
         for i in range(1, len(edges)):
@@ -215,6 +228,11 @@ class MeshTools():
             return v
 
     def create_rect(self, se, start, point, dissolve_verts=True):
+        if se is None:
+            c2 = edge_snap(FakeEdge(start), point)
+            a = self.mesh.verts.new(start)
+            b = self.mesh.verts.new(c2)
+            se = self.mesh.edges.new([a,b])
         ## First handle the endpoints, create vertices as necessary
         start = self.create_vertex(se, start)
         ee = self.closest_connected_edge(se, point)

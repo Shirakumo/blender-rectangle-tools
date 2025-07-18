@@ -74,7 +74,11 @@ class MeshTools():
     def refresh(self):
         if self.mesh is not None:
             self.mesh.free()
-        self.mesh = bmesh.from_edit_mesh(self.object.data)
+        if self.object.data.is_editmode:
+            self.mesh = bmesh.from_edit_mesh(self.object.data)
+        else:
+            self.mesh = bmesh.new()
+            self.mesh.from_mesh(self.object.data)
         self.mesh.faces.ensure_lookup_table()
         self.mesh.edges.ensure_lookup_table()
         self.kd = KDTree(len(self.mesh.faces))
@@ -84,7 +88,13 @@ class MeshTools():
 
     def sync(self):
         if self.mesh is not None:
-            bmesh.update_edit_mesh(self.object.data)
+            print("Sync")
+            bmesh.ops.recalc_face_normals(self.mesh, faces=self.mesh.faces)
+            if self.mesh.is_wrapped:
+                bmesh.update_edit_mesh(self.object.data)
+            else:
+                self.mesh.to_mesh(self.object.data)
+                self.object.data.update()
             self.mesh.faces.ensure_lookup_table()
             self.mesh.edges.ensure_lookup_table()
 

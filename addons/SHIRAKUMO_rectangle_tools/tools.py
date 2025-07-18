@@ -1,4 +1,5 @@
 import bpy
+from bl_ui.space_toolsystem_toolbar import VIEW3D_PT_tools_active as tools
 from mathutils import Vector, Matrix, Quaternion
 from . import module, render
 from .mesh import *
@@ -35,11 +36,37 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
         name="Grid",
         default=0.1, min=0.0, options=set(),
         description="The grid size used for snapping")
+    grid_basis: bpy.props.EnumProperty(
+        name="Basis",
+        items=[
+            ("GLOBAL", "Global", "Snap to global coordinates", "ORIENTATION_GLOBAL", 1),
+            ("VIEW", "View", "Snap to the view plane", "ORIENTATION_VIEW", 2),
+            ("LOCAL", "Local", "Snap to the object's transform", "ORIENTATION_LOCAL", 3),
+            ("NORMAL", "Normal", "Snap to the normal of the adjacent face", "ORIENTATION_NORMAL", 4),
+        ],
+        default="GLOBAL",
+        description="The basis to grid snap relative to")
     dissolve_verts: bpy.props.BoolProperty(
         name="Dissolve Verts",
         default=True, options=set(),
         description="Whether to dissolve superfluous vertices on the extruded edge")
     renderer = None
+
+    @classmethod
+    def poll(cls, context):
+        if context.area.type == 'VIEW_3D':
+            return True
+        return False
+
+    def snap(self, thing):
+        basis = Matrix.Identity(4)
+        if self.grid_basis == "VIEW":
+            basis = bpy.context.region_data.view_matrix
+        if self.grid_basis == "LOCAL":
+            basis = bpy.context.object.matrix_world
+        if self.grid_basis == "NORMAL":
+            raise Exception("IMPLEMENT ME!")
+        return snap_to_grid(thing, self.grid, basis)
 
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
@@ -57,19 +84,21 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
         return {'RUNNING_MODAL'}
 
     def invoke(self, context, event):
+        edit_type = context.scene.transform_orientation_slots[0].type
+        if edit_type in ['GLOBAL', 'VIEW', 'LOCAL', 'NORMAL']:
+            self.grid_basis = edit_type
+        self.renderer = bpy.types.SpaceView3D.draw_handler_add(self.render, (context,), "WINDOW", "POST_VIEW")
         context.window_manager.modal_handler_add(self)
-        self.renderer = bpy.types.SpaceView3D.draw_handler_add(self.render, (context,), "WINDOW", "POST_PIXEL")
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        start = snap_to_grid(self.start, self.grid)
-        end = snap_to_grid(self.end, self.grid)
+        start = self.snap(self.start)
+        end = self.snap(self.end)
         mt = MeshTools(context.object)
         res = mt.create_rect(mt.mesh.edges[self.edge], start, end, dissolve_verts=self.dissolve_verts)
         if res is not None:
             mt.select(res[1])
-            mt.sync()
-        mt.free()
+        mt.free(sync=True)
         if self.renderer:
             bpy.types.SpaceView3D.draw_handler_remove(self.renderer, "WINDOW")
             self.renderer = None
@@ -85,15 +114,11 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
         edge = mesh.edges[self.edge]
         a = mesh.vertices[edge.vertices[0]].co
         b = mesh.vertices[edge.vertices[1]].co
-        start = line_snap(snap_to_grid(self.start, self.grid), a, b)
-        end = snap_to_grid(self.end, self.grid)
-        r = line_rotation(a, b)
-        diff = r @ (end-start)
-        mat = Matrix.Translation(start)
-        mat = mat @ r.to_matrix().to_4x4()
-        mat = mat @ Matrix.Scale(diff[0], 4, [1,0,0])
-        mat = mat @ Matrix.Scale(diff[1], 4, [0,1,0])
-        render.rect(context, mat)
+        c1 = line_snap(self.snap(self.start), a, b)
+        c3 = self.snap(self.end)
+        c2 = line_snap(c3, a, b)
+        c4 = c3+(c1-c2)
+        render.rect(context, [*c1, *c2, *c3, *c4])
 
 class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
     bl_idname = "SHIRAKUMO_RECT_G_rectangle_preselect"
@@ -115,6 +140,10 @@ class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
         self.select = True
         self.edgepoint = None
         self.op = self.target_set_operator("shirakumo_rect.draw_rectangle")
+
+    def exit(self, context, cancel):
+        self.edge = None
+        self.edgepoint = None
     
     def draw(self, context):
         mat = context.object.matrix_world
@@ -147,15 +176,9 @@ class SHIRAKUMO_RECT_GG_rectangle(bpy.types.GizmoGroup):
     bl_operator = "shirakumo_rect.draw_rectangle"
     mt = None
 
-    @classmethod
-    def poll(cls, context):
-        if context.mode != 'EDIT_MESH':
-            context.window_manager.gizmo_group_type_unlink_delayed(SHIRAKUMO_RECT_GG_rectangle.bl_idname)
-            return False
-        return True
-
     def refresh(self, context):
-        self.mt.refresh()
+        if self.mt != None:
+            self.mt.refresh()
 
     def setup(self, context):
         if self.mt == None:
@@ -163,7 +186,11 @@ class SHIRAKUMO_RECT_GG_rectangle(bpy.types.GizmoGroup):
         self.gizmo_dial = self.gizmos.new("SHIRAKUMO_RECT_G_rectangle_preselect")
 
     def draw_prepare(self, context):
-        pass
+        ## KLUDGE: Check if our tool is no longer active and deregister if so.
+        ##         Otherwise our tool is going to be active all while another is going on, too!
+        ##         There is no actual hook for when the tool is disabled, lmao.
+        if context.space_data and tools.tool_active_from_context(bpy.context).idname != SHIRAKUMO_RECT_WT_rectangle.bl_idname:
+            context.window_manager.gizmo_group_type_unlink_delayed(SHIRAKUMO_RECT_GG_rectangle.bl_idname)
 
 class SHIRAKUMO_RECT_WT_rectangle(bpy.types.WorkSpaceTool):
     bl_space_type = 'VIEW_3D'
@@ -175,14 +202,13 @@ class SHIRAKUMO_RECT_WT_rectangle(bpy.types.WorkSpaceTool):
     )
     bl_icon = 'ops.gpencil.primitive_box'
     bl_widget = 'SHIRAKUMO_RECT_GG_rectangle'
-    # bl_keymap = (
-    #      ("shirakumo_rect.draw_rectangle", {"type": 'LEFTMOUSE', "value": 'RELEASE'},
-    #       {"properties": []}),
-    # )
 
     def draw_settings(context, layout, tool):
         group = module.preferences
         layout.prop(group, "grid")
+
+class SHIRAKUMO_RECT_WT_rectangle_OBJECT(SHIRAKUMO_RECT_WT_rectangle):
+    bl_context_mode = 'OBJECT'
 
 class SHIRAKUMO_RECT_properties(bpy.types.AddonPreferences):
     bl_idname = module.name
@@ -202,8 +228,13 @@ def register():
     for cls in registered_classes:
         bpy.utils.register_class(cls)
     bpy.utils.register_tool(SHIRAKUMO_RECT_WT_rectangle, after={'builtin.poly_build'})
+    ## KLUDGE: Can't seem to enter the tool after the group builtin.primitive_cube_add creates, it just
+    ##         always wants to insert the tool into that group. Fun. I could make it into a group, but
+    ##         then it would be a pointless group with nothing else.
+    bpy.utils.register_tool(SHIRAKUMO_RECT_WT_rectangle_OBJECT, after={'builtin.measure'}, separator=True)
 
 def unregister():
     bpy.utils.unregister_tool(SHIRAKUMO_RECT_WT_rectangle)
+    bpy.utils.unregister_tool(SHIRAKUMO_RECT_WT_rectangle_OBJECT)
     for cls in registered_classes:
         bpy.utils.unregister_class(cls)

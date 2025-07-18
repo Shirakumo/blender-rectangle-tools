@@ -1,4 +1,5 @@
 import bpy
+import bmesh
 from bl_ui.space_toolsystem_toolbar import VIEW3D_PT_tools_active as tools
 from mathutils import Vector, Matrix, Quaternion
 from . import module, render
@@ -110,15 +111,19 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
             self.renderer = None
 
     def render(self, context):
-        mesh = context.object.data
+        if context.object.data.is_editmode:
+            mesh = bmesh.from_edit_mesh(context.object.data)
+        else:
+            mesh = bmesh.new()
+            mesh.from_mesh(context.object.data)
+        mesh.edges.ensure_lookup_table()
         edge = mesh.edges[self.edge]
-        a = mesh.vertices[edge.vertices[0]].co
-        b = mesh.vertices[edge.vertices[1]].co
-        c1 = line_snap(self.snap(self.start), a, b)
+        c1 = edge_snap(edge, self.snap(self.start))
         c3 = self.snap(self.end)
-        c2 = line_snap(c3, a, b)
+        c2 = edge_snap(edge, c3)
         c4 = c3+(c1-c2)
         render.rect(context, [*c1, *c2, *c3, *c4])
+        mesh.free()
 
 class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
     bl_idname = "SHIRAKUMO_RECT_G_rectangle_preselect"

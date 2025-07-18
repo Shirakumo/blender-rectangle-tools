@@ -91,13 +91,6 @@ class MeshTools():
             bmesh.ops.recalc_face_normals(self.mesh, faces=self.mesh.faces)
             if self.mesh.is_wrapped:
                 bmesh.update_edit_mesh(self.object.data)
-                ## KLUDGE: For whatever dumbfuck reason the edge list on the original object mesh
-                ##         that we use in the tool preselect rendering is **not** updated after
-                ##         the above call, so we do the cool 😎 thing of toggling edit mode... and
-                ##         recreating the bmesh because toggling edit mode trashes it.
-                bpy.ops.object.mode_set(mode = 'OBJECT')
-                bpy.ops.object.mode_set(mode = 'EDIT')
-                self.mesh = bmesh.from_edit_mesh(self.object.data)
             else:
                 self.mesh.to_mesh(self.object.data)
                 self.object.data.update()

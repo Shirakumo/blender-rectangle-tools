@@ -99,6 +99,10 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
         edge = None
         if self.edge < len(mt.mesh.edges):
             edge = mt.mesh.edges[self.edge]
+            end_edge = edge_snap(edge, self.end)
+            if (end_edge-self.start).length == 0.0:
+                start = edge.verts[0].co
+                end = edge.verts[1].co+(self.end-end_edge)
         res = mt.create_rect(edge, start, end, dissolve_verts=self.dissolve_verts)
         if res is not None:
             mt.select(res[1])

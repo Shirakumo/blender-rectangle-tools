@@ -150,7 +150,7 @@ class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
         self.edge = None
         self.select = True
         self.edgepoint = None
-        self.op = self.target_set_operator("shirakumo_rect.draw_rectangle")
+        self.op = self.target_set_operator(SHIRAKUMO_RECT_OT_draw_rectangle.bl_idname)
 
     def exit(self, context, cancel):
         self.edge = None

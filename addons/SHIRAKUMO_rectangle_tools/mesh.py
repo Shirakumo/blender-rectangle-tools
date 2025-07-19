@@ -56,6 +56,9 @@ def edge_between(a, b):
             return e
     return None
 
+def plane_snap(origin, normal, p):
+    return p-normal*normal.dot(p-origin)
+
 def mouse_position_3d(context, mouse_pos, point=Vector()):
     region = context.region
     region3D = context.space_data.region_3d

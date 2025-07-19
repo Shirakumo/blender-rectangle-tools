@@ -92,6 +92,8 @@ class MeshTools():
             self.mesh.from_mesh(self.object.data)
         self.mesh.faces.ensure_lookup_table()
         self.mesh.edges.ensure_lookup_table()
+        self.from_local = self.object.matrix_world
+        self.to_local = self.from_local.inverted_safe()
         self.kd = KDTree(len(self.mesh.faces))
         for i,f in enumerate(self.mesh.faces):
             self.kd.insert(f.calc_center_median(), i)
@@ -135,9 +137,6 @@ class MeshTools():
                 e = edges[i]
         p = edge_snap(e, point)
         return (e,d,p,f)
-
-    def project_to_plane(self, context, mouse_pos, point):
-        return mouse_position_3d(context, mouse_pos, point)
 
     def closest_connected_edge(self, e, point):
         f = edge_factor(e, point)
@@ -231,6 +230,7 @@ class MeshTools():
             return v
 
     def create_rect(self, se, start, point, dissolve_verts=True):
+        ## If we have no edge, create it from a base direction
         if se is None:
             c2 = edge_snap(FakeEdge(start), point)
             a = self.mesh.verts.new(start)

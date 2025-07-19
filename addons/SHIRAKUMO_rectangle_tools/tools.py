@@ -15,7 +15,7 @@ def snap_to_grid(p, grid=0.1, basis=Matrix.Identity(4)):
     return basis @ Vector(r)
 
 class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
-    bl_idname = "shirakumo_rect.draw_rectangle"
+    bl_idname = "mesh.draw_rectangle"
     bl_label = "Draw rectangle"
     bl_options = {'REGISTER', 'UNDO'}
     bl_description = "Draw a rectangle"
@@ -216,7 +216,7 @@ class SHIRAKUMO_RECT_GG_rectangle(bpy.types.GizmoGroup):
 class SHIRAKUMO_RECT_WT_rectangle(bpy.types.WorkSpaceTool):
     bl_space_type = 'VIEW_3D'
     bl_context_mode = 'EDIT_MESH'
-    bl_idname = 'SHIRAKUMO_rectangle_tools.rectangle_tool'
+    bl_idname = 'mesh.draw_rectangle_tool'
     bl_label = 'Rectangle Tool'
     bl_description = (
         'Extend geometry via rectangles'

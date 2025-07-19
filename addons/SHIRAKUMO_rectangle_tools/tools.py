@@ -69,14 +69,19 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
             raise Exception("IMPLEMENT ME!")
         return snap_to_grid(thing, self.grid, basis)
 
+    def update(self, context, event):
+        mouse_pos = (event.mouse_region_x, event.mouse_region_y)
+        self.end = mouse_position_3d(context, mouse_pos, self.start_orig)
+        if event.ctrl:
+            diff = edge_snap(self.edge_data, self.end)-self.start_orig
+            self.start = self.start_orig-diff
+
     def modal(self, context, event):
         if event.type == 'MOUSEMOVE':
-            mouse_pos = (event.mouse_region_x, event.mouse_region_y)
-            self.end = mouse_position_3d(context, mouse_pos, self.start)
+            self.update(context, event)
             context.area.tag_redraw()
         elif event.type == 'LEFTMOUSE':
-            mouse_pos = (event.mouse_region_x, event.mouse_region_y)
-            self.end = mouse_position_3d(context, mouse_pos, self.start)
+            self.update(context, event)
             return self.execute(context)
         elif event.type == 'RIGHTMOUSE':
             return {'CANCELLED'}
@@ -84,10 +89,28 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
             return {'PASS_THROUGH'}
         return {'RUNNING_MODAL'}
 
+    def ensure_edge_data(self, context):
+        if hasattr(self, 'edge_data'):
+            return
+        if context.object.data.is_editmode:
+            mesh = bmesh.from_edit_mesh(context.object.data)
+        else:
+            mesh = bmesh.new()
+            mesh.from_mesh(context.object.data)
+        mesh.edges.ensure_lookup_table()
+        if len(mesh.edges) <= self.edge:
+            edge = FakeEdge(self.start)
+        else:
+            edge = mesh.edges[self.edge]
+        self.edge_data = FakeEdge(edge.verts[0].co, edge.verts[1].co)
+        mesh.free()
+
     def invoke(self, context, event):
         edit_type = context.scene.transform_orientation_slots[0].type
         if edit_type in ['GLOBAL', 'VIEW', 'LOCAL', 'NORMAL']:
             self.grid_basis = edit_type
+        self.start_orig = self.start.copy()
+        self.ensure_edge_data(context)
         self.renderer = bpy.types.SpaceView3D.draw_handler_add(self.render, (context,), "WINDOW", "POST_VIEW")
         context.window_manager.modal_handler_add(self)
         return {'RUNNING_MODAL'}
@@ -118,22 +141,13 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
             self.renderer = None
 
     def render(self, context):
-        if context.object.data.is_editmode:
-            mesh = bmesh.from_edit_mesh(context.object.data)
-        else:
-            mesh = bmesh.new()
-            mesh.from_mesh(context.object.data)
-        mesh.edges.ensure_lookup_table()
-        if len(mesh.edges) <= self.edge:
-            edge = FakeEdge(self.start)
-        else:
-            edge = mesh.edges[self.edge]
+        ## FIXME: account for object transform
+        edge = self.edge_data
         c1 = edge_snap(edge, self.snap(self.start))
         c3 = self.snap(self.end)
         c2 = edge_snap(edge, c3)
         c4 = c3+(c1-c2)
         render.rect(context, [*c1, *c2, *c3, *c4])
-        mesh.free()
 
 class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
     bl_idname = "SHIRAKUMO_RECT_G_rectangle_preselect"
@@ -184,7 +198,9 @@ class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
             self.op.edge = e.index
         self.op.start = p
         self.op.grid = module.preferences.grid
-        self.edgepoint = snap_to_grid(p, module.preferences.grid)
+        p = snap_to_grid(p, module.preferences.grid)
+        if self.edge:
+            self.edgepoint = edge_snap(self.edge, p)
         context.area.tag_redraw()
         return 0
 
@@ -194,7 +210,6 @@ class SHIRAKUMO_RECT_GG_rectangle(bpy.types.GizmoGroup):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'WINDOW'
     bl_options = {'3D', 'SELECT'}
-    bl_operator = "shirakumo_rect.draw_rectangle"
     mt = None
 
     @classmethod

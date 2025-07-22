@@ -1,4 +1,5 @@
 import gpu
+from mathutils import Matrix
 from gpu_extras.batch import batch_for_shader
 from struct import pack
 
@@ -37,9 +38,9 @@ batch = batch_for_shader(shader, 'TRIS', {
     "n": [0,1,2,0,2,3]
 })
 
-def rect(context, points):
+def rect(context, points, matrix=Matrix.Identity(4)):
     shader.bind()
-    shader.uniform_float("u_ViewProjectionMatrix", context.region_data.perspective_matrix)
+    shader.uniform_float("u_ViewProjectionMatrix", context.region_data.perspective_matrix @ matrix)
     shader.uniform_vector_float(shader.uniform_from_name("u_v"), pack("12f",*points), 3, 4)
     shader.uniform_float("u_Color", (0.5,0.5,0.9,0.5))
     batch.draw(shader)

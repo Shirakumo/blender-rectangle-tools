@@ -118,8 +118,11 @@ class MeshTools():
         self.mesh = None
         self.kd = None
 
+    def from_mouse(self, context, mouse_pos):
+        return self.to_local @ mouse_position_3d(context, mouse_pos)
+
     def closest_edge_view(self, context, mouse_pos):
-        return self.closest_edge(mouse_position_3d(context, mouse_pos))
+        return self.closest_edge(self.from_mouse(context, mouse_pos))
 
     def closest_edge(self, point):
         f = self.kd.find(point)[1]

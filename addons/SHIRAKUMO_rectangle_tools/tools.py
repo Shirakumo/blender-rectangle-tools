@@ -75,6 +75,7 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
     def update(self, context, event):
         mouse_pos = (event.mouse_region_x, event.mouse_region_y)
         self.end = mouse_position_3d(context, mouse_pos, self.start_orig)
+        self.end = context.object.matrix_world.inverted_safe() @ self.end
         if event.ctrl:
             diff = edge_snap(self.edge_data, self.end)-self.start_orig
             self.start = self.start_orig-diff
@@ -145,12 +146,13 @@ class SHIRAKUMO_RECT_OT_draw_rectangle(bpy.types.Operator):
 
     def render(self, context):
         ## FIXME: account for object transform
+        world = context.object.matrix_world
         edge = self.edge_data
         c1 = edge_snap(edge, self.snap(self.start))
         c3 = self.snap(self.end)
         c2 = edge_snap(edge, c3)
         c4 = c3+(c1-c2)
-        render.rect(context, [*c1, *c2, *c3, *c4])
+        render.rect(context, [*c1, *c2, *c3, *c4], world)
 
 class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
     bl_idname = "SHIRAKUMO_RECT_G_rectangle_preselect"
@@ -178,21 +180,21 @@ class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
         self.edgepoint = None
     
     def draw(self, context):
-        mat = context.object.matrix_world
+        world = context.object.matrix_world
         if self.edgepoint is not None:
             mat = Matrix.Translation(self.edgepoint)
-            self.draw_custom_shape(self.point, matrix=mat)
+            self.draw_custom_shape(self.point, matrix=(world @ mat))
         if self.edge is not None:
             r = edge_rotation(self.edge)
             mat = Matrix.Translation(self.edge.verts[0].co)
             mat = mat @ r.to_matrix().to_4x4()
             mat = mat @ Matrix.Scale(self.edge.calc_length(), 4, [1,0,0])
-            self.draw_custom_shape(self.line, matrix=mat)
+            self.draw_custom_shape(self.line, matrix=(world @ mat))
 
     def test_select(self, context, mouse_pos):
         res = self.group.mt.closest_edge_view(context, mouse_pos)
         if res is None:
-            p = mouse_position_3d(context, mouse_pos)
+            p = self.group.mt.from_mouse(context, mouse_pos)
             self.edge = None
             self.op.edge = 0
         else:

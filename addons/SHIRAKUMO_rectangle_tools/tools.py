@@ -2,8 +2,11 @@ import bpy
 import bmesh
 from bl_ui.space_toolsystem_toolbar import VIEW3D_PT_tools_active as tools
 from mathutils import Vector, Matrix
-from . import module, render
+from . import render
 from .mesh import *
+
+def preferences():
+    return bpy.context.preferences.addons[__package__].preferences
 
 def snap_to_grid(p, grid=0.1, basis=Matrix.Identity(4)):
     if grid == 0.0:
@@ -197,8 +200,8 @@ class SHIRAKUMO_RECT_G_rectangle_preselect(bpy.types.Gizmo):
             self.edge = e
             self.op.edge = e.index
         self.op.start = p
-        self.op.grid = module.preferences.grid
-        p = snap_to_grid(p, module.preferences.grid)
+        self.op.grid = preferences().grid
+        p = snap_to_grid(p, preferences().grid)
         if self.edge:
             self.edgepoint = edge_snap(self.edge, p)
         context.area.tag_redraw()
@@ -244,14 +247,13 @@ class SHIRAKUMO_RECT_WT_rectangle(bpy.types.WorkSpaceTool):
     bl_widget = 'SHIRAKUMO_RECT_GG_rectangle'
 
     def draw_settings(context, layout, tool):
-        group = module.preferences
-        layout.prop(group, "grid")
+        layout.prop(preferences(), "grid")
 
 class SHIRAKUMO_RECT_WT_rectangle_OBJECT(SHIRAKUMO_RECT_WT_rectangle):
     bl_context_mode = 'OBJECT'
 
 class SHIRAKUMO_RECT_properties(bpy.types.AddonPreferences):
-    bl_idname = module.name
+    bl_idname = __package__
     grid: bpy.props.FloatProperty(
         name="Grid",
         default=0.1, min=0.0, options=set(),

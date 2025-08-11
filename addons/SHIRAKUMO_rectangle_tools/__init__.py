@@ -10,8 +10,8 @@ bl_info = {
     "category": "",
     "location": "Edit > Tools",
     "description": "Tools to more easily draw rectangles in edit mode",
-    "tracker_url": "https://github.com/shirakumo/trial-blender-addons/issues",
-    "url": "https://github.com/shirakumo/trial-blender-addons",
+    "tracker_url": "https://shirakumo.org/project/trial-blender-addons/issues",
+    "url": "https://shirakumo.org/project/trial-blender-addons",
 }
 
 def register():

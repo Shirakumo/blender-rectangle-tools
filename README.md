@@ -15,6 +15,6 @@ Finally, if you simply click your mouse without dragging, it will extrude the en
 After any kind of extrusion is completed, the newly created edge is automatically selected for you. That lets you adjust it using the standard blender shortcuts like `r` to rotate, `s` to scale, and `g` to move.
 
 ## Installation
-You can [download the latest release](https://github.com/Shirakumo/blender-rectangle-tools/releases/latest/) of our plugin directly here from GitHub. The zip file can be imported into Blender just like any other addon.
+You can [download the latest release](https://shirakumo.org/project/blender-rectangle-tools/releases/latest/) of our plugin directly here from GitHub. The zip file can be imported into Blender just like any other addon.
 
 Activating the `Rectangle Tools` addon should give you a new tool in object and edit modes.
